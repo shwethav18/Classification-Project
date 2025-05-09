@@ -1,0 +1,677 @@
+---
+title: "DANA4840_Project"
+author: ""
+date: "2024-11-26"
+output: html_document
+---
+
+```{r}
+library(factoextra)
+library(dplyr)
+```
+
+### Swiss dataset
+
+### Objective
+The Swiss dataset contains socio-economic data for 47 Swiss provinces, including fertility, education, and reliance on agriculture. The purpose of clustering is to group provinces into segments with similar socio-economic profiles. This analysis aims to uncover patterns that can inform regional development strategies and help policymakers address regional disparities.
+
+#### What questions can be answered after clustering?
+Which Swiss provinces exhibit high fertility and low education levels?
+Are there distinct socio-economic clusters based on industrialization and reliance on agriculture?
+How does socio-economic development vary across Swiss provinces?
+
+
+```{r}
+data("swiss")
+df <- scale(swiss)
+head(df)
+```
+```{r}
+head(df)
+```
+
+```{r}
+summary(df)
+```
+
+```{r}
+missing_values <- sapply(df, function(x) sum(is.na(x)))
+
+# Print the number of missing values for each column
+print(missing_values)
+
+```
+There are no missing values in the dataset.
+
+```{r}
+pairs(df) # scatter plot matrix for the swiss dataset
+```
+Let’s focus on one specific pair: Fertility vs. Education
+
+```{r}
+plot(swiss$Fertility, swiss$Education)
+```
+
+#### Assessing Clustering Tendency
+
+```{r}
+library(hopkins)
+hopkins_value<-hopkins(df,m=(nrow(df)-1))
+hopkins_value
+```
+
+### Visual methods
+
+Compute the dissimilarity (DM) matrix between the objects in the data set using the Euclidean distance measure.
+
+```{r}
+fviz_dist(dist(df), lab_size = 5)+
+labs(title = "Swiss Data")
+```
+
+The color level is proportional to the value of the dissimilarity between observations:
+pure red if dist(xi, xj) = 0 and pure blue if dist(xi, xj) = 1. Objects belonging to the
+same cluster are displayed in consecutive order.
+
+<ul>
+<li> Blue values between Lausanne and Vevey might suggest socio-economic similarity. 
+<li> Red values between St Maurice and Neuchâtel might indicate contrasting socio-economic features.
+<\ul>
+
+
+### Optimal Clusters
+
+#### Elbow method
+
+```{r}
+library(factoextra)
+```
+
+
+```{r}
+fviz_nbclust(df, hcut, method = "wss") +
+geom_vline(xintercept = 3, linetype = 2)+
+labs(subtitle = "Elbow method")
+```
+
+
+#### Silhouette method
+
+```{r}
+fviz_nbclust(df, hcut, method = "silhouette")+
+labs(subtitle = "Silhouette method")
+```
+
+#### Gap statistic
+
+```{r}
+set.seed(123)
+fviz_nbclust(df, hcut, nstart = 25, method = "gap_stat", nboot = 50)+
+labs(subtitle = "Gap statistic method")
+```
+The Gap Statistics suggests 1 cluster and the Avg Silhouette method and the Elbow method suggests 3. We can go with the majority and say there are 3 clusters.
+
+#### Using nbClust
+
+```{r}
+set.seed(123)
+library("NbClust")
+index = c("dunn", "gap", "silhouette")
+for( i in index) {
+nb <- NbClust(df, distance = "euclidean", method = "average", index = i)
+fviz_nbclust(nb)
+}
+```
+
+
+#### Hierarchical Clustering
+
+We are going to do different linkage methods to compare the clustering. 
+
+```{r}
+##Computing distance matrix
+res.dist <- dist(df, method = "euclidean")
+```
+
+
+#### Comparing linkage methods using the cluster plot
+
+In this section, we will compare the clusters formed by different linkage methods and find which linkage method clusters distinctively.
+
+```{r}
+# Install and load gridExtra package if not already done
+# install.packages("gridExtra")
+library(gridExtra)
+
+# List to store the plots
+plots <- list()
+
+# Loop through each numerical variable
+for (var in c('ward.D2', 'ward.D', 'average', 'complete', 'single')) {
+  res.hc2 <- hclust(res.dist, method = var)
+  grp_av <- cutree(res.hc2, k = 3)
+  
+  p <- fviz_cluster(list(data = df, cluster = grp_av),
+  palette = c("#2E9FDF", "#00AFBB", "#E7B800"), main = paste("Cluster plot for" ,var, "Linkage"),
+  ellipse.type = "convex", # Concentration ellipse
+  show.clust.cent = FALSE, ggtheme = theme_minimal())
+  plots[[var]] <- p  # Save plot to the list
+}
+
+# Arrange the plots side by side (adjust ncol to the number of columns you want)
+grid.arrange(grobs = plots, ncol = 2)  # Adjust ncol to your preference
+dev.copy(device = png, filename = 'cluster_plots.png', width = 1000, height = 800, res=120) 
+dev.off()
+```
+
+```{r, echo=FALSE, out.width = '100%'}
+knitr::include_graphics("cluster_plots.png")
+```
+
+We can see that there is an overlap in the clusters for the Ward.D2 method. Rest of the linkage methods are showing good  distinct clustering
+
+##### Visualizing the cluster tree - Dendograms
+
+```{r}
+res.hc <- hclust(res.dist, method = "ward.D")
+
+fviz_dend(res.hc, k = 3, # Cut in four groups 
+main = "Dendogram of Ward.D",
+cex = 0.5, # label size
+k_colors = c("#2E9FDF", "#00AFBB", "#E7B800"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE # Add rectangle around groups
+)
+```
+
+```{r}
+res.hc1 <- hclust(res.dist, method = "ward.D2")
+fviz_dend(res.hc1, k = 3, # Cut in four groups 
+main = "Dendogram of Ward.D2",
+cex = 0.5, # label size
+k_colors = c("#2E9FDF", "#00AFBB", "#E7B800"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE # Add rectangle around groups
+)
+```
+
+```{r}
+res.hc2 <- hclust(res.dist, method = "average")
+fviz_dend(res.hc2, k = 3, # Cut in three groups 
+main = "Dendogram of Average",
+cex = 0.5, # label size
+k_colors = c("#2E9FDF", "#00AFBB", "#E7B800"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE # Add rectangle around groups
+)
+```
+
+```{r}
+res.hc3 <- hclust(res.dist, method = "complete")
+fviz_dend(res.hc3, k = 3, # Cut in three groups 
+main = "Dendogram of Complete",
+cex = 0.5, # label size
+k_colors = c("#2E9FDF", "#00AFBB", "#E7B800"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE # Add rectangle around groups
+)
+```
+
+```{r}
+res.hc4 <- hclust(res.dist, method = "single")
+fviz_dend(res.hc4, k = 3, # Cut in three groups 
+main = "Dendogram of Single",
+cex = 0.5, # label size
+k_colors = c("#2E9FDF", "#00AFBB", "#E7B800"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE # Add rectangle around groups
+)
+```
+
+#### Comparing the linkage methods by verifying the cluster tree 
+
+One way to measure how well the cluster tree generated by the hclust() function reflects your data is to compute the correlation between the cophenetic distances and the original distance data generated by the dist() function. 
+
+If the clustering is valid, the linking of objects in the cluster tree should have a strong correlation with the distances between objects in the original distance matrix.
+
+```{r}
+# Compute cophentic distance
+res.coph <- cophenetic(res.hc)
+# Correlation between cophenetic distance and
+# the original distance
+cat("Correlation between the distance vs ward.D's cophenetic distance")
+cor(res.dist, res.coph)
+```
+
+```{r}
+cat("Correlation between the distance vs ward.D2's cophenetic distance")
+cor(res.dist, cophenetic(res.hc1))
+```
+
+
+```{r}
+cat("Correlation between the distance vs average's cophenetic distance")
+cor(res.dist, cophenetic(res.hc2))
+```
+
+```{r}
+cat("Correlation between the distance vs complete's cophenetic distance")
+cor(res.dist, cophenetic(res.hc3))
+```
+
+```{r}
+cat("Correlation between the distance vs single's cophenetic distance")
+cor(res.dist, cophenetic(res.hc4))
+```
+
+From the correlation between the distance vs their cophenetic distance, we can see that the average linkage has the highest correlation with 0.7963, making it closer to the real distance. Therefore, average linkages is the best among the other linkages
+
+##### Average linkage 
+
+
+```{r}
+# Cut tree into 3 groups
+grp <- cutree(res.hc2, k = 3)
+head(grp, n = 3)
+```
+
+```{r}
+# Number of members in each cluster
+table(grp)
+```
+
+```{r}
+# Get the names for the members of cluster 1
+rownames(df)[grp == 1]
+```
+
+```{r}
+## ----cluster-plot, fig.width=6, fig.height=6-----------------------------
+fviz_cluster(list(data = df, cluster = grp),
+palette = c("#2E9FDF", "#00AFBB", "#E7B800"),
+ellipse.type = "convex", # Concentration ellipse
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+```
+
+#### Comparison of the linkage methods using ***their dendograms***
+
+***Note that, conclusions about the proximity of two objects can be drawn only based on the height where branches containing those two objects first are fused. We cannot use the proximity of two objects along the horizontal axis as a criteria of their similarity.***
+
+
+#### Comparing and Visualizing Dendrograms
+
+##### Comparing average and Ward.D
+
+```{r}
+library(dendextend)
+
+# Compute 2 hierarchical clusterings
+hc1 <- hclust(res.dist, method = "average")
+hc2 <- hclust(res.dist, method = "ward.D")
+
+# Create two dendrograms
+dend1 <- as.dendrogram (hc1)
+dend2 <- as.dendrogram (hc2)
+
+# Create a list to hold dendrograms
+dend_list <- dendlist(dend1, dend2)
+```
+
+```{r}
+# Compute alignment quality. Lower value = good alignment quality
+entangle <- dendlist(dend1, dend2) %>%
+  untangle(method = "step1side") %>% # Find the best alignment layout
+  entanglement()                     # Alignment quality
+```
+
+
+```{r}
+# Align and plot two dendrograms side by side
+tanglegram(dend1, dend2, highlight_distinct_edges = FALSE, # Turn-off dashed lines
+common_subtrees_color_lines = FALSE, # Turn-off line colors
+common_subtrees_color_branches = TRUE, # Color common branches
+main = paste("entanglement Average vs Ward.D =", round(entangle, 2)))                      # Draw the two dendrograms
+```
+
+
+```{r}
+# Compute 2 hierarchical clusterings
+hcco <- hclust(res.dist, method = "complete")
+hcsin <- hclust(res.dist, method = "single")
+
+# Create two dendrograms
+dendco <- as.dendrogram (hcco)
+dendsin <- as.dendrogram (hcsin)
+
+# Create a list to hold dendrograms *complte and single
+dend_listcs <- dendlist(dendco, dendsin)
+```
+
+```{r}
+ent <- dendlist(dendco, dendsin) %>%
+  untangle(method = "step1side") %>% # Find the best alignment layout
+  entanglement() 
+```
+
+```{r}
+tanglegram(dendco, dendsin, highlight_distinct_edges = FALSE, # Turn-off dashed lines
+common_subtrees_color_lines = FALSE, # Turn-off line colors
+common_subtrees_color_branches = TRUE, # Color common branches
+main = paste("entanglement Complete vs Single =", round(ent, 2)))                      # Draw the two dendrograms
+```
+
+
+The quality of the alignment of the two trees can be measured using the function entanglement(). Entanglement is a measure between 1 (full entanglement) and 0 (no
+entanglement). 
+
+A lower entanglement coefficient corresponds to a good alignment.
+
+Complete and Single has the lowest entanglement,  making it more similar to one other.
+
+#### Correlation matrix between a list of dendrogams
+
+The function cor.dendlist() is used to compute “Baker” or “Cophenetic” correlation matrix between a list of trees. The value can range between -1 to 1. With near 0 values meaning that the two trees are not statistically similar.
+
+```{r}
+# Cophenetic correlation matrix
+cor.dendlist(dend_list, method = "cophenetic")
+```
+
+```{r}
+# Baker correlation matrix
+cor.dendlist(dend_list, method = "baker")
+```
+
+```{r}
+# Cophenetic correlation coefficient
+cor_cophenetic(dend1, dend2)
+```
+
+```{r}
+# Baker correlation coefficient
+cor_bakers_gamma(dend1, dend2)
+```
+
+It’s also possible to compare simultaneously multiple dendrograms. A chaining operator %>% is used to run multiple function at the same time. It’s useful for simplifying the code:
+```{r}
+# Create multiple dendrograms by chaining
+dend1 <- df %>% dist %>% hclust("complete") %>% as.dendrogram
+dend2 <- df %>% dist %>% hclust("single") %>% as.dendrogram
+dend3 <- df %>% dist %>% hclust("average") %>% as.dendrogram
+dend4 <- df %>% dist %>% hclust("ward.D2") %>% as.dendrogram
+dend5 <- df %>% dist %>% hclust("ward.D") %>% as.dendrogram
+# Compute correlation matrix
+dend_list <- dendlist("Complete" = dend1, "Single" = dend2,
+                      "Average" = dend3, "Ward.D2" = dend4, "Ward.D" = dend5)
+cors <- cor.dendlist(dend_list)
+# Print correlation matrix
+round(cors, 2)
+```
+
+```{r}
+# Visualize the correlation matrix using corrplot package
+library(corrplot)
+corrplot(cors, "pie", "lower")
+```
+Insights from the graph - 
+<ul>
+<li> The average linkage is very closely Single, Ward.D2, and Ward.D 
+<li> The ward.D is very correlated to Ward.D 
+</ul>
+
+```{r}
+fviz_dend(res.hc2, cex = 0.5, k = 3,
+k_colors = "jco", type = "circular")
+```
+
+
+```{r}
+require("igraph")
+fviz_dend(res.hc2, k = 3, k_colors = "jco",
+type = "phylogenic", repel = TRUE)
+```
+
+
+```{r}
+require("igraph")
+fviz_dend(res.hc2, k = 3, # Cut in three groups
+k_colors = "jco",
+type = "phylogenic", repel = TRUE,
+phylo_layout = "layout.gem")
+```
+
+##### Plotting a sub-tree of dendrograms
+
+```{r}
+# Create a plot of the whole dendrogram,
+# and extract the dendrogram data
+dend_plot <- fviz_dend(res.hc2, k = 3, # Cut in three groups
+cex = 0.5, # label size
+k_colors = "jco"
+)
+dend_data <- attr(dend_plot, "dendrogram") # Extract dendrogram data
+```
+
+```{r}
+# Cut the dendrogram at height h = 10
+dend_cuts <- cut(dend_data, h = 10)
+# Visualize the truncated version containing
+# two branches
+fviz_dend(dend_cuts$upper)
+```
+
+```{r}
+# Plot the whole dendrogram
+print(dend_plot)
+```
+```{r}
+# Plot subtree 1
+fviz_dend(dend_cuts$lower[[1]], main = "Subtree 1")
+```
+
+```{r}
+# Plot subtree 2
+fviz_dend(dend_cuts$lower[[2]], main = "Subtree 2")
+```
+
+```{r}
+fviz_dend(dend_cuts$lower[[2]], type = "circular")
+```
+#### Cluster Validation Statistics
+
+```{r}
+# Hierarchical clustering
+hc.res <- eclust(df, "hclust", k = 3, hc_metric = "euclidean",
+hc_method = "average", graph = FALSE)
+# Visualize dendrograms
+fviz_dend(hc.res, show_labels = FALSE,
+palette = "jco", as.ggplot = TRUE)
+```
+
+##### Cluster Validation
+Silhouette coefficient (Si) measures how similar an object i is to the the other objects in its own cluster versus those in the neighbor cluster. Si values range from 1 to - 1:
+
+• A value of Si close to 1 indicates that the object is well clustered. In the other words, the object i is similar to the other objects in its group.
+
+• A value of Si close to -1 indicates that the object is poorly clustered, and that assignment to some other cluster would probably improve the overall results.
+
+```{r}
+fviz_silhouette(hc.res, palette = "jco",
+ggtheme = theme_classic())
+```
+
+```{r}
+## # Silhouette information
+silinfo <- hc.res$silinfo
+names(silinfo)
+```
+
+```{r}
+## # Silhouette widths of each observation
+head(silinfo$widths[, 1:3], 10)
+```
+
+```{r}
+## # Average silhouette width of each cluster
+silinfo$clus.avg.widths
+```
+
+```{r}
+## # The total average (mean of all individual silhouette widths)
+silinfo$avg.width
+```
+
+```{r}
+## # The size of each clusters
+hc.res$size
+```
+
+It can be seen that several samples, in cluster 1,3,4, have a negative silhouette coefficient. This means that they are not in the right cluster. We can find the name of these samples and determine the clusters they are closer (neighbor cluster), as follow:
+
+```{r}
+# Silhouette width of observation
+sil <- hc.res$silinfo$widths[, 1:3]
+# Objects with negative silhouette
+neg_sil_index <- which(sil[, 'sil_width'] < 0)
+sil[neg_sil_index, , drop = FALSE]
+```
+
+There are three negative silhouette width, which means these cities are placed in the wrong cluster.
+
+#### Computing Dunn index and other cluster validation statistics
+
+```{r}
+library(fpc)
+# Statistics for k-means clustering
+hc_stats <- cluster.stats(dist(df), hc.res$cluster)
+# Dun index
+hc_stats$dunn
+```
+
+
+```{r}
+library(fpc)
+# Statistics for k-means clustering
+hc_stats <- cluster.stats(dist(df), hc.res$cluster)
+# Dun index
+hc_stats$dunn
+```
+
+#### Internal Validation
+
+```{r}
+# Load necessary libraries
+library(clValid)
+
+# Perform clustering validation with connectivity metric
+connectivity_results <- clValid(df, nClust = 3:10, 
+                                 clMethods = "hierarchical", 
+                                 validation = "internal")
+
+# Extract connectivity scores
+optimalScores(connectivity_results)
+```
+
+#### Stability 
+
+```{r}
+# Load necessary libraries
+library(clValid)
+
+# Perform clustering validation with connectivity metric
+stability_results <- clValid(df, nClust = 2:10, 
+                                 clMethods = "hierarchical", 
+                                 validation = "stability")
+
+# Extract connectivity scores
+optimalScores(stability_results)
+```
+
+### Research Component
+
+#### Fraud Detection in Transactions
+
+**Problem:** Fraudulent transactions differ from regular patterns.
+
+**Solution:** 
+<ul>
+<li> Use clustering algorithms to group transactions by features such as transaction amount, time, location, and merchant type.
+<li> Transactions far from cluster centroids or in small clusters may be flagged as potential fraud.
+<\ul>
+
+#### Applications in Cybersecurity
+
+##### Network Intrusion Detection
+
+**Problem:** Intrusions or attacks manifest as unusual network traffic patterns.
+
+**Solution:** 
+<ul>
+<li> Cluster network activity logs based on features like IP address, port, packet size, and frequency.
+<li> Identify points that deviate from the normal traffic clusters as potential intrusions.
+<\ul> 
+##### Behavioral Analysis
+
+**Problem:** Detecting unusual user behaviors (e.g., unusual login times or access patterns).
+
+**Solution:**
+<ul>
+<li> Group users by behavior patterns, such as access frequency, location, and device type.
+<li> Spot users that do not conform to common behavior clusters.
+<\ul>
+
+##### Example code by simulating the data
+
+```{r}
+# Simulate a dataset with anomalies
+set.seed(123)
+normal_data <- data.frame(
+    x = rnorm(100, mean = 50, sd = 10),
+    y = rnorm(100, mean = 30, sd = 5)
+)
+anomaly_data <- data.frame(
+    x = c(150, 160),  # Outliers
+    y = c(80, 90)
+)
+df_an <- rbind(normal_data, anomaly_data)
+
+# Scale the data
+df_scaled <- scale(df_an)
+```
+
+
+##### Anamoly Detection using K-Means
+K-means clustering groups data into clusters, and anomalies can be identified as points far from cluster centroids.
+
+```{r}
+# Apply K-means clustering
+set.seed(123)
+kmeans_result <- kmeans(df_scaled, centers = 3, nstart = 20)
+
+# Add cluster labels to the data
+df$cluster <- kmeans_result$cluster
+
+# Visualize the clusters
+fviz_cluster(kmeans_result, data = df_scaled, geom = "point") +
+    ggtitle("K-Means Clustering")
+```
+
+##### Anamoly Detection using DBSCAN
+
+DBSCAN (Density-Based Spatial Clustering of Applications with Noise) is effective for identifying anomalies as noise points.
+
+```{r}
+# Apply DBSCAN
+library(dbscan)
+dbscan_result <- dbscan(df_scaled, eps = 0.5, minPts = 5)
+
+# Add cluster labels (-1 indicates noise)
+df$cluster_dbscan <- dbscan_result$cluster
+
+# Visualize DBSCAN clusters
+fviz_cluster(dbscan_result, data = df_scaled, geom = "point") +
+    ggtitle("DBSCAN Clustering")
+
+```
+
+
